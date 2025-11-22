@@ -13,7 +13,6 @@ function App() {
     criteria: [] as string[],
   });
 
-  // Состояние: показываем ли результат сравнения
   const [isComparisonMode, setIsComparisonMode] = useState(false);
 
   const toggleSection = (section: keyof typeof openSections) => {
@@ -37,7 +36,6 @@ function App() {
     });
   };
 
-  // Логика отключения критериев в зависимости от типа карты
   useEffect(() => {
     const cardTypes = selected.cardType;
     const isOnlyDebit =
@@ -129,7 +127,6 @@ function App() {
         </header>
         <main>
         <div className="min-h-screen bg-gray-100 flex flex-col">
-        {/* Основной контейнер — будет менять расположение */}
         <div
             className={`flex-1 flex transition-all duration-500 ease-in-out ${
             isComparisonMode
@@ -137,7 +134,6 @@ function App() {
                 : "justify-center items-center p-6"
             }`}
         >
-            {/* === ЛЕВАЯ ПАНЕЛЬ С ФИЛЬТРАМИ === */}
             <div
             className={`${
                 isComparisonMode
@@ -145,9 +141,7 @@ function App() {
                 : "w-full max-w-lg"
             } transition-all duration-500`}
             >
-            {/* Все секции и кнопка в одном блоке */}
             <div className="space-y-6 bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
-                {/* Секция Тип карты */}
                 <section>
                 <button
                     onClick={() => toggleSection("cardType")}
@@ -178,7 +172,6 @@ function App() {
                 )}
                 </section>
 
-                {/* Секция Банки */}
                 <section>
                 <button
                     onClick={() => toggleSection("banks")}
@@ -222,7 +215,6 @@ function App() {
                 )}
                 </section>
 
-                {/* Секция Критерии */}
                 <section>
                 <button
                     onClick={() => toggleSection("criteria")}
@@ -275,7 +267,6 @@ function App() {
                 )}
                 </section>
 
-                {/* Кнопка */}
                 <div className="px-8 pb-8">
                 <button
                     onClick={handleCompare}
@@ -283,7 +274,7 @@ function App() {
                     className={`w-full py-5 text-xl font-semibold rounded-2xl transition-all shadow-lg ${
                     isButtonDisabled
                         ? "bg-gray-400 cursor-not-allowed"
-                        : "bg-blue-600 hover:bg-blue-700 active:scale-95 text-white"
+                        : "bg-green-600 hover:bg-green-700 active:scale-95 text-white"
                     }`}
                 >
                     Сравнить продукты
@@ -292,11 +283,9 @@ function App() {
             </div>
             </div>
 
-            {/* === ЦЕНТРАЛЬНЫЙ ЧАТ (появляется только после сравнения) === */}
             {isComparisonMode && (
             <div className="flex-1 max-w-2xl mx-4 bg-white rounded-2xl shadow-xl flex flex-col h-[85vh]">
                 <div className="flex-1 p-6 overflow-y-auto">
-                {/* Здесь будет текст от твоего скрипта */}
                 <div className="bg-gray-100 rounded-lg p-4 mb-4">
                     <p className="text-gray-800">
                     Привет! Я подготовил сравнение по выбранным параметрам...
@@ -304,7 +293,6 @@ function App() {
                 </div>
                 </div>
 
-                {/* Поле ввода */}
                 <div className="p-6 border-t">
                 <input
                     type="text"
@@ -315,20 +303,15 @@ function App() {
             </div>
             )}
 
-            {/* === ПРАВЫЙ БЛОК С ТАБЛИЦЕЙ И ГРАФИКОМ === */}
             {isComparisonMode && (
             <div className="w-96 space-y-6">
-                {/* Таблица */}
                 <div className="bg-white rounded-2xl shadow-xl p-6 h-[45vh] overflow-auto">
                 <h3 className="text-xl font-bold mb-4">Таблица сравнения</h3>
-                {/* Подключи сюда свой компонент с таблицей из JSON */}
                 <p className="text-gray-500 text-center">Таблица загружается...</p>
                 </div>
 
-                {/* График */}
                 <div className="bg-white rounded-2xl shadow-xl p-6 h-[38vh]">
                 <h3 className="text-xl font-bold mb-4">График</h3>
-                {/* Подключи сюда свой график на TS */}
                 <p className="text-gray-500 text-center">График загружается...</p>
                 </div>
             </div>
