@@ -9,6 +9,8 @@ urllib3
 # Web scraping
 beautifulsoup4
 
+# LLM
+gigachat
 
 # Database
 sqlalchemy
