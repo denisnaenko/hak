@@ -1,16 +1,11 @@
 import requests
 import json
 import os
-import csv
 from gigachat import GigaChat
-from prompts import PRODUCT_ANALYST_PROMPT 
-
-prompt = PRODUCT_ANALYST_PROMPT
 
 # Конфигурация для OpenRouter
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY") or "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"
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY") or "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"
 OPENROUTER_MODELS = ["x-ai/grok-4.1-fast:free", "deepseek/deepseek-r1-0528-qwen3-8b"]
-CSV_FILE = "data/model_responses.csv"
 
 # Конфигурация для GigaChat
 GIGACHAT_CREDENTIALS = 'MDE5YWFiZTAtNjE1Zi03ZGNiLWJlMGItZjlkMzA5NWI0MTVmOjY5NWZmZDQ1LTdhYWEtNDdiOC1hMWMwLTRmZWYwYzYxNTNhOA=='
@@ -19,7 +14,7 @@ giga = GigaChat(
     verify_ssl_certs=False 
 )
 
-def make_openrouter_request(model):
+def make_openrouter_request(model, prompt):
     """Выполняет запрос к OpenRouter API для указанной модели и возвращает результаты."""
     try:
         print(f"=== Запрос для модели {model} (OpenRouter) ===")
@@ -101,7 +96,7 @@ def make_openrouter_request(model):
             "status_code": -3
         }
 
-def make_gigachat_request():
+def make_gigachat_request(prompt):
     """Выполняет запрос к GigaChat API и возвращает результаты."""
     model_name = "giga-chat"
     try:
@@ -129,29 +124,18 @@ def make_gigachat_request():
             "status_code": -3
         }
 
-def save_to_csv(results):
-    """Сохраняет результаты в CSV-файл."""
-    if not results:
-        print("Нет данных для сохранения.")
-        return
-    
-    with open(CSV_FILE, 'w', newline='', encoding='utf-8') as file:
-        writer = csv.DictWriter(file, fieldnames=['model', 'status_code', 'reasoning_present', 'response'])
-        writer.writeheader()
-        writer.writerows(results)
-    
-    print(f"Результаты сохранены в {CSV_FILE}")
-
-if __name__ == "__main__":
+def save_models_results(prompt):
     all_results = []
     
     # Обработка OpenRouter моделей
     for model in OPENROUTER_MODELS:
-        result = make_openrouter_request(model)
+        result = make_openrouter_request(model, prompt)
+        print(f"Имя модели: {model}")
         all_results.append(result)
     
     # Обработка GigaChat
-    gigachat_result = make_gigachat_request()
+    gigachat_result = make_gigachat_request(prompt)
     all_results.append(gigachat_result)
     
-    save_to_csv(all_results)
+    return all_results
+
