@@ -75,7 +75,7 @@ function App() {
         if (isOnlyDebit) {
           newCriteria = newCriteria.filter(
             (c) =>
-              !["Кредитный лимит", "Льготный период", "Первоначальный взнос"].includes(c)
+              !["Стоимость обслуживания(кредитная)", "Кредитный лимит", "Льготный период", "Первоначальный взнос"].includes(c)
           );
         }
 
@@ -83,6 +83,7 @@ function App() {
           newCriteria = newCriteria.filter(
             (c) =>
               ![
+                "Стоимость обслуживания(дебетовая)",
                 "СМС-уведомления",
                 "Снятие наличных в других банках",
                 "Переводы по реквизитам в другие банки",
@@ -182,7 +183,7 @@ function App() {
 
       <main className="w-full max-w-7xl">
         <div className="flex gap-6 min-h-screen">
-          {/* === ЛЕВЫЙ ФРЕЙМ — ФИЛЬТРЫ (остаётся на месте) === */}
+          {/* === ЛЕВЫЙ ФРЕЙМ — ФИЛЬТРЫ === */}
           <div className="w-96 flex-shrink-0">
             <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
               {/* Тип карты */}
@@ -333,8 +334,8 @@ function App() {
 
           {/* === ПРАВЫЙ БЛОК — только в режиме сравнения === */}
           {isComparisonMode && (
-            <div className="flex-1 flex flex-col gap-6">
-              {/* СРЕДНИЙ ФРЕЙМ — Чат (теперь сверху) */}
+            <div className="flex-1 flex flex-col gap-6 min-w-0">
+              {/* ВЕРХНИЙ ФРЕЙМ — Чат */}
               <div className="bg-white rounded-2xl shadow-xl flex flex-col h-[45vh]">
                 <div className="flex-1 p-6 overflow-y-auto">
                   <div className="bg-gray-100 rounded-lg p-4 mb-4">
@@ -353,96 +354,195 @@ function App() {
                 </div>
               </div>
 
-              {/* ПРАВЫЙ ФРЕЙМ — Таблица + График (теперь снизу) */}
-                {/* Таблица */}
-                <div className="flex-1 bg-white rounded-2xl shadow-xl p-6 overflow-auto">
-                  <h3 className="text-xl font-bold mb-4">Таблица сравнения</h3>
-                  <p className="text-gray-500 text-center mt-10">
-                    Таблица будет здесь после получения данных с сервера...
-                  </p>
-                </div>
+              {/* СРЕДНИЙ ФРЕЙМ — Таблица */}
+              <div className="bg-white rounded-2xl shadow-xl p-6 overflow-hidden flex flex-col h-[400px]">
+                <h3 className="text-2xl font-bold mb-6 text-gray-800">Таблица сравнения</h3>
 
-                {/* График */}
-                <div className="flex-1 bg-white rounded-2xl shadow-xl p-6 overflow-hidden">
-                  <h3 className="text-xl font-bold mb-4">Сравнение по критериям</h3>
+                {isComparisonMode && selected.banks.length > 0 && selected.criteria.length > 0 ? (
+                  <div className="overflow-auto flex-1">
+                    <div className="min-w-full inline-block align-middle">
+                      <table className="min-w-full border-collapse text-sm">
+                        <thead>
+                          <tr className="bg-gray-50 border-b-2 border-gray-200">
+                            <th className="px-6 py-5 text-left font-semibold text-gray-700 sticky left-0 bg-gray-50 z-10 min-w-[200px]">
+                              Критерий / Банк
+                            </th>
+                            {selected.banks.map((bank) => (
+                              <th
+                                key={bank}
+                                className="px-8 py-5 text-center font-semibold text-gray-700 min-w-[180px] whitespace-nowrap"
+                              >
+                                {bank}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {selected.criteria.map((criterion, idx) => (
+                            <tr
+                              key={criterion}
+                              className={`hover:bg-gray-50 transition-colors ${
+                                idx % 2 === 0 ? "bg-white" : "bg-gray-50"
+                              }`}
+                            >
+                              <td className="px-6 py-5 font-medium text-gray-800 sticky left-0 bg-inherit z-10 whitespace-nowrap min-w-[200px]">
+                                {criterion}
+                              </td>
+                              {selected.banks.map((bank) => {
+                                const mockValue = (() => {
+                                  const examples: Record<string, string[]> = {
+                                    "Стоимость обслуживания(дебетовая)": ["Бесплатно", "99 ₽/мес", "0 ₽ при тратах > 10к"],
+                                    "Стоимость обслуживания(кредитная)": ["0 ₽ первый год", "590 ₽/мес", "Бесплатно при тратах > 15к"],
+                                    "СМС-уведомления": ["59 ₽/мес", "Бесплатно", "69 ₽/мес"],
+                                    "Снятие наличных в других банках": ["1%, мин. 290 ₽", "Бесплатно до 100к", "2%, мин. 399 ₽"],
+                                    "Процент на остаток": ["до 12%", "до 10%", "до 14%"],
+                                    "Кредитный лимит": ["до 1 500 000 ₽", "до 1 000 000 ₽", "до 700 000 ₽"],
+                                    "Льготный период": ["до 120 дней", "до 110 дней", "до 55 дней"],
+                                    "Процентные ставки": ["от 19,9%", "от 17,9%", "от 23,9%"],
+                                    "Программа лояльности": ["Кэшбэк до 30%", "Баллы 1%–10%", "Мили 1,5 за 100 ₽"],
+                                  };
 
-                  {selected.banks.length === 0 || selected.criteria.length === 0 ? (
-                    <p className="text-gray-500 text-center mt-10">
+                                  const pool = examples[criterion] || ["—", "Есть", "Нет", "Зависит от условий"];
+                                  return pool[Math.floor(Math.random() * pool.length)];
+                                })();
+
+                                return (
+                                  <td
+                                    key={bank}
+                                    className="px-8 py-5 text-center text-gray-700 min-w-[180px] whitespace-nowrap"
+                                  >
+                                    {mockValue}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-16 flex-1 flex items-center justify-center">
+                    <div>
+                      <div className="bg-gray-200 border-2 border-dashed rounded-xl w-24 h-24 mx-auto mb-6" />
+                      <p className="text-gray-500 text-lg">
+                        Выберите банки и критерии, затем нажмите «Сравнить продукты»
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+{/* НИЖНИЙ ФРЕЙМ — График */}
+              <div className="bg-white rounded-2xl shadow-xl p-6 overflow-hidden flex flex-col h-[500px]">
+                <h3 className="text-xl font-bold mb-4">Сравнение по критериям</h3>
+
+                {selected.banks.length === 0 || selected.criteria.length === 0 ? (
+                  <div className="flex-1 flex items-center justify-center">
+                    <p className="text-gray-500 text-center">
                       Выберите банки и критерии, чтобы увидеть график
                     </p>
-                  ) : (
-                    <div className="h-[calc(100%-60px)]">
-                      <Bar
-                        options={{
-                          responsive: true,
-                          maintainAspectRatio: false,
-                          plugins: {
-                            legend: {
-                              position: 'bottom' as const,
-                              labels: {
-                                padding: 1,
-                                font: { size: 12 },
+                  </div>
+                ) : (
+                  <div className="flex-1 min-h-0 overflow-auto">
+                    <div className="min-w-full" style={{ minWidth: `${selected.banks.length * 120}px` }}>
+                      <div style={{ height: '450px', minWidth: '100%' }}>
+                        <Bar
+                          options={{
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                              legend: {
+                                position: 'bottom' as const,
+                                labels: {
+                                  padding: 10,
+                                  font: { size: 12 },
+                                  boxWidth: 15,
+                                },
                               },
-                            },
-                            title: {
-                              display: true,
-                              text: 'Сравнение выбранных банков',
-                              font: { size: 16, weight: 'bold' },
-                              padding: 20,
-                            },
-                            tooltip: {
-                              callbacks: {
-                                label: (context) => {
-                                  const criterion = selected.criteria[context.datasetIndex];
-                                  const bank = selected.banks[context.dataIndex];
-                                  const value = context.raw;
-                                  return `${criterion}: ${value} (в ${bank})`;
+                              title: {
+                                display: true,
+                                text: 'Сравнение выбранных банков по критериям',
+                                font: { size: 16, weight: 'bold' },
+                                padding: 25,
+                              },
+                              tooltip: {
+                                callbacks: {
+                                  label: (context) => {
+                                    const criterion = selected.criteria[context.datasetIndex];
+                                    const bank = selected.banks[context.dataIndex];
+                                    const value = context.raw;
+                                    return `${criterion}: ${value} (${bank})`;
+                                  },
                                 },
                               },
                             },
-                          },
-                          scales: {
-                            y: {
-                              beginAtZero: true,
-                              ticks: { padding: 10 },
-                            },
-                            x: {
-                              ticks: {
-                                maxRotation: 45,
-                                minRotation: 45,
+                            scales: {
+                              y: {
+                                beginAtZero: true,
+                                ticks: { 
+                                  padding: 10,
+                                  font: { size: 11 }
+                                },
+                                grid: {
+                                  color: 'rgba(0, 0, 0, 0.1)',
+                                }
+                              },
+                              x: {
+                                ticks: {
+                                  maxRotation: 45,
+                                  minRotation: 45,
+                                  font: { size: 11 }
+                                },
+                                grid: {
+                                  color: 'rgba(0, 0, 0, 0.1)',
+                                }
                               },
                             },
-                          },
-                        }}
-                        data={{
-                          labels: selected.banks,
-                          datasets: selected.criteria.map((criterion, index) => ({
-                            label: criterion,
-                            data: selected.banks.map(() =>
-                              Math.round(Math.random() * 900 + 100)
-                            ),
-                            backgroundColor: [
-                              'rgba(59, 130, 246, 0.7)',
-                              'rgba(34, 197, 94, 0.7)',
-                              'rgba(251, 191, 36, 0.7)',
-                              'rgba(239, 68, 68, 0.7)',
-                              'rgba(168, 85, 247, 0.7)',
-                              'rgba(251, 146, 60, 0.7)',
-                              'rgba(14, 165, 233, 0.7)',
-                              'rgba(236, 72, 153, 0.7)',
-                              'rgba(132, 204, 22, 0.7)',
-                            ][index % 9],
-                            borderWidth: 1,
-                            borderColor: '#333',
-                            borderRadius: 4,
-                            maxBarThickness: 50,
-                          })),
-                        }}
-                      />
+                            layout: {
+                              padding: {
+                                left: 10,
+                                right: 10,
+                                top: 10,
+                                bottom: 10
+                              }
+                            }
+                          }}
+                          data={{
+                            labels: selected.banks,
+                            datasets: selected.criteria.map((criterion, index) => ({
+                              label: criterion,
+                              data: selected.banks.map(() =>
+                                Math.round(Math.random() * 900 + 100)
+                              ),
+                              backgroundColor: [
+                                'rgba(59, 130, 246, 0.8)',
+                                'rgba(34, 197, 94, 0.8)',
+                                'rgba(251, 191, 36, 0.8)',
+                                'rgba(239, 68, 68, 0.8)',
+                                'rgba(168, 85, 247, 0.8)',
+                                'rgba(251, 146, 60, 0.8)',
+                                'rgba(14, 165, 233, 0.8)',
+                                'rgba(236, 72, 153, 0.8)',
+                                'rgba(132, 204, 22, 0.8)',
+                                'rgba(99, 102, 241, 0.8)',
+                                'rgba(20, 184, 166, 0.8)',
+                                'rgba(245, 158, 11, 0.8)',
+                              ][index % 12],
+                              borderWidth: 1,
+                              borderColor: '#333',
+                              borderRadius: 6,
+                              maxBarThickness: 35,
+                              minBarLength: 5,
+                            })),
+                          }}
+                        />
+                      </div>
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
+            </div>
           )}
         </div>
       </main>
