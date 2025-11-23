@@ -24,11 +24,24 @@ ChartJS.register(
   Legend
 );
 
+// Типы для шаблонов
+interface Template {
+  id: string;
+  name: string;
+  selected: {
+    cardType: string[];
+    banks: string[];
+    criteria: string[];
+  };
+  timestamp: number;
+}
+
 function App() {
   const [openSections, setOpenSections] = useState({
     cardType: true,
     banks: true,
     criteria: true,
+    templates: false,
   });
 
   const [selected, setSelected] = useState({
@@ -37,8 +50,23 @@ function App() {
     criteria: [] as string[],
   });
 
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [currentTemplateName, setCurrentTemplateName] = useState("");
   const [isComparisonMode, setIsComparisonMode] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Загрузка шаблонов из localStorage при загрузке компонента
+  useEffect(() => {
+    const savedTemplates = localStorage.getItem('comparisonTemplates');
+    if (savedTemplates) {
+      setTemplates(JSON.parse(savedTemplates));
+    }
+  }, []);
+
+  // Сохранение шаблонов в localStorage при изменении
+  useEffect(() => {
+    localStorage.setItem('comparisonTemplates', JSON.stringify(templates));
+  }, [templates]);
 
   const toggleSection = (section: keyof typeof openSections) => {
     setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));
@@ -59,6 +87,176 @@ function App() {
         return { ...prev, [category]: [...current, value] };
       }
     });
+  };
+
+  // Сохранение текущего выбора как шаблона
+  const saveAsTemplate = () => {
+    if (!currentTemplateName.trim()) {
+      alert("Введите название шаблона");
+      return;
+    }
+
+    if (selected.cardType.length === 0 || selected.banks.length === 0 || selected.criteria.length === 0) {
+      alert("Выберите хотя бы один тип карты, банк и критерий для сохранения шаблона");
+      return;
+    }
+
+    const newTemplate: Template = {
+      id: Date.now().toString(),
+      name: currentTemplateName.trim(),
+      selected: { ...selected },
+      timestamp: Date.now()
+    };
+
+    setTemplates(prev => [...prev, newTemplate]);
+    setCurrentTemplateName("");
+    alert(`Шаблон "${newTemplate.name}" сохранен!`);
+  };
+
+  // Загрузка шаблона
+  const loadTemplate = (template: Template) => {
+    setSelected(template.selected);
+    alert(`Шаблон "${template.name}" загружен!`);
+  };
+
+  // Удаление шаблона
+  const deleteTemplate = (templateId: string, templateName: string) => {
+    if (confirm(`Удалить шаблон "${templateName}"?`)) {
+      setTemplates(prev => prev.filter(t => t.id !== templateId));
+    }
+  };
+
+  // Экспорт шаблона в JSON файл
+  const exportTemplate = (template: Template) => {
+    const dataStr = JSON.stringify(template, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `template_${template.name.replace(/\s+/g, '_')}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // Экспорт всех шаблонов в один JSON файл
+  const exportAllTemplates = () => {
+    if (templates.length === 0) {
+      alert("Нет шаблонов для экспорта");
+      return;
+    }
+
+    const exportData = {
+      version: "1.0",
+      exportDate: new Date().toISOString(),
+      templates: templates
+    };
+
+    const dataStr = JSON.stringify(exportData, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `all_templates_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // Импорт шаблонов из JSON файла
+  const importTemplates = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string;
+        const data = JSON.parse(content);
+        
+        let templatesToImport: Template[] = [];
+        
+        // Проверяем формат файла
+        if (data.templates && Array.isArray(data.templates)) {
+          // Формат с несколькими шаблонами
+          templatesToImport = data.templates;
+        } else if (data.id && data.name && data.selected) {
+          // Формат с одним шаблоном
+          templatesToImport = [data];
+        } else {
+          throw new Error("Неверный формат файла");
+        }
+
+        // Валидация шаблонов
+        const validTemplates = templatesToImport.filter(template => 
+          template.id && 
+          template.name && 
+          template.selected && 
+          template.selected.cardType && 
+          template.selected.banks && 
+          template.selected.criteria
+        );
+
+        if (validTemplates.length === 0) {
+          throw new Error("В файле нет валидных шаблонов");
+        }
+
+        // Добавляем новые шаблоны, избегая дубликатов по ID
+        setTemplates(prev => {
+          const existingIds = new Set(prev.map(t => t.id));
+          const newTemplates = validTemplates.filter(t => !existingIds.has(t.id));
+          return [...prev, ...newTemplates];
+        });
+
+        alert(`Успешно импортировано ${validTemplates.length} шаблонов`);
+        
+        // Очищаем input
+        event.target.value = '';
+      } catch (error) {
+        console.error('Ошибка импорта:', error);
+        alert(`Ошибка импорта: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  // Экспорт текущего сравнения в JSON
+  const exportCurrentComparison = () => {
+    if (isButtonDisabled) {
+      alert("Нет данных для экспорта");
+      return;
+    }
+
+    const comparisonData = {
+      version: "1.0",
+      exportDate: new Date().toISOString(),
+      comparison: {
+        selected,
+        chartData: {
+          labels: selected.banks,
+          datasets: selected.criteria.map((criterion) => ({
+            label: criterion,
+            data: selected.banks.map(() => Math.round(Math.random() * 900 + 100))
+          }))
+        }
+      }
+    };
+
+    const dataStr = JSON.stringify(comparisonData, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `comparison_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   useEffect(() => {
@@ -186,6 +384,131 @@ function App() {
           {/* === ЛЕВЫЙ ФРЕЙМ — ФИЛЬТРЫ === */}
           <div className="w-96 flex-shrink-0">
             <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
+              {/* Сохранение шаблона */}
+              <section>
+                <button
+                  onClick={() => toggleSection("templates")}
+                  className="w-full px-8 py-6 flex items-center justify-between text-left hover:bg-gray-50 transition"
+                >
+                  <h2 className="text-xl font-semibold text-gray-800">Шаблоны сравнения</h2>
+                  <ChevronDown isOpen={openSections.templates} />
+                </button>
+                {openSections.templates && (
+                  <div className="px-8 pb-6 pt-2">
+                    <div className="space-y-4">
+                      {/* Сохранение текущего выбора */}
+                      <div className="space-y-3">
+                        <input
+                          type="text"
+                          placeholder="Название шаблона"
+                          value={currentTemplateName}
+                          onChange={(e) => setCurrentTemplateName(e.target.value)}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <button
+                          onClick={saveAsTemplate}
+                          disabled={!currentTemplateName.trim() || isButtonDisabled}
+                          className={`w-full py-3 text-sm font-semibold rounded-lg transition-all ${
+                            !currentTemplateName.trim() || isButtonDisabled
+                              ? "bg-gray-300 cursor-not-allowed"
+                              : "bg-blue-600 hover:bg-blue-700 text-white"
+                          }`}
+                        >
+                          Сохранить текущий выбор
+                        </button>
+                      </div>
+
+                      {/* Кнопки импорта/экспорта */}
+                      <div className="flex gap-2">
+                        <button
+                          onClick={exportAllTemplates}
+                          disabled={templates.length === 0}
+                          className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all ${
+                            templates.length === 0
+                              ? "bg-gray-300 cursor-not-allowed"
+                              : "bg-green-600 hover:bg-green-700 text-white"
+                          }`}
+                        >
+                          Экспорт всех
+                        </button>
+                        <label className="flex-1">
+                          <input
+                            type="file"
+                            accept=".json"
+                            onChange={importTemplates}
+                            className="hidden"
+                          />
+                          <div className="w-full py-2 text-sm font-semibold text-center bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition cursor-pointer">
+                            Импорт
+                          </div>
+                        </label>
+                      </div>
+
+                      {/* Кнопка экспорта текущего сравнения */}
+                      <button
+                        onClick={exportCurrentComparison}
+                        disabled={isButtonDisabled}
+                        className={`w-full py-2 text-sm font-semibold rounded-lg transition-all ${
+                          isButtonDisabled
+                            ? "bg-gray-300 cursor-not-allowed"
+                            : "bg-orange-600 hover:bg-orange-700 text-white"
+                        }`}
+                      >
+                        Экспорт текущего сравнения
+                      </button>
+
+                      {/* Список сохраненных шаблонов */}
+                      <div className="space-y-2 max-h-60 overflow-y-auto">
+                        <p className="text-sm font-medium text-gray-700">Сохраненные шаблоны:</p>
+                        {templates.length === 0 ? (
+                          <p className="text-sm text-gray-500 text-center py-2">
+                            Нет сохраненных шаблонов
+                          </p>
+                        ) : (
+                          templates.map((template) => (
+                            <div
+                              key={template.id}
+                              className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition"
+                            >
+                              <div className="flex-1">
+                                <p className="font-medium text-gray-800">{template.name}</p>
+                                <p className="text-xs text-gray-500">
+                                  {template.selected.cardType.length} типов, {template.selected.banks.length} банков, {template.selected.criteria.length} критериев
+                                </p>
+                              </div>
+                              <div className="flex gap-1">
+                                <button
+                                  onClick={() => loadTemplate(template)}
+                                  className="px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 transition"
+                                  title="Загрузить"
+                                >
+                                  📥
+                                </button>
+                                <button
+                                  onClick={() => exportTemplate(template)}
+                                  className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition"
+                                  title="Экспорт в JSON"
+                                >
+                                  📄
+                                </button>
+                                <button
+                                  onClick={() => deleteTemplate(template.id, template.name)}
+                                  className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600 transition"
+                                  title="Удалить"
+                                >
+                                  🗑️
+                                </button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </section>
+
+              {/* Остальные секции (Тип карты, Банки, Критерии) остаются без изменений */}
               {/* Тип карты */}
               <section>
                 <button
@@ -433,7 +756,7 @@ function App() {
                 )}
               </div>
 
-{/* НИЖНИЙ ФРЕЙМ — График */}
+              {/* НИЖНИЙ ФРЕЙМ — График */}
               <div className="bg-white rounded-2xl shadow-xl p-6 overflow-hidden flex flex-col h-[500px]">
                 <h3 className="text-xl font-bold mb-4">Сравнение по критериям</h3>
 
