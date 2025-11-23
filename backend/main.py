@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from src.model_analyze import save_models_results
 from src.model_summarize import save_summarized_result
 from src.prompts import get_product_analysis_prompt
+import re
 
 app = FastAPI()
 
@@ -22,6 +23,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+def fix_json_trailing_commas(text):
+    """Удаляет лишние запятые в JSON"""
+    # Удаляет запятые перед } и ]
+    fixed_text = re.sub(r',\s*}', '}', text)
+    fixed_text = re.sub(r',\s*]', ']', fixed_text)
+    return fixed_text
 
 # Модель данных для запроса
 class ComparisonRequest(BaseModel):
@@ -62,6 +70,9 @@ async def compare_products(request: ComparisonRequest):
             summarized_result = summarized_result_dict.get('response', 'Результат не получен')
         else:
             summarized_result = str(summarized_result_dict)
+            summarized_result = fix_json_trailing_commas(summarized_result)
+    
+    
         
         print("=== Анализ завершен ===")
         print(f"Результат: {summarized_result[:200]}...")  # Выводим первые 200 символов

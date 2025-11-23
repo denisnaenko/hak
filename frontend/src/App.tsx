@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import ReactMarkdown from 'react-markdown';
 
 import {
   Chart as ChartJS,
@@ -46,7 +47,7 @@ function App() {
 
   const [selected, setSelected] = useState({
     cardType: [] as string[],
-    banks: [] as string[],
+    banks: ["Сбербанк"] as string[], // Сбербанк выбран по умолчанию
     criteria: [] as string[],
   });
 
@@ -54,6 +55,7 @@ function App() {
   const [currentTemplateName, setCurrentTemplateName] = useState("");
   const [isComparisonMode, setIsComparisonMode] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [summarizedResult, setSummarizedResult] = useState<string>("");
 
   // Загрузка шаблонов из localStorage при загрузке компонента
   useEffect(() => {
@@ -68,6 +70,11 @@ function App() {
     localStorage.setItem('comparisonTemplates', JSON.stringify(templates));
   }, [templates]);
 
+  // Отладка: логируем изменения summarizedResult
+  useEffect(() => {
+    console.log("summarizedResult изменился:", summarizedResult ? summarizedResult.substring(0, 100) + "..." : "пусто");
+  }, [summarizedResult]);
+
   const toggleSection = (section: keyof typeof openSections) => {
     setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));
   };
@@ -78,6 +85,11 @@ function App() {
     isDisabled: boolean = false
   ) => {
     if (isDisabled) return;
+    
+    // Сбербанк всегда должен быть выбран и не может быть изменен
+    if (category === "banks" && value === "Сбербанк") {
+      return;
+    }
 
     setSelected((prev) => {
       const current = prev[category];
@@ -341,6 +353,7 @@ function App() {
     if (isButtonDisabled) return;
 
     setIsLoading(true);
+    setSummarizedResult(""); // Сбрасываем предыдущий результат
 
     try {
       const response = await fetch("http://localhost:8000/api/params", {
@@ -361,6 +374,76 @@ function App() {
 
       const data = await response.json();
       console.log("Ответ от сервера:", data);
+      console.log("Структура данных:", JSON.stringify(data, null, 2));
+
+      // Сохраняем результат анализа - проверяем несколько возможных путей
+      let result = null;
+      
+      // Проверяем summarizedResult
+      if (data.data?.summarizedResult) {
+        result = data.data.summarizedResult;
+      } else if (data.summarizedResult) {
+        result = data.summarizedResult;
+      } else if (data.data?.data?.summarizedResult) {
+        result = data.data.data.summarizedResult;
+      }
+      // Также проверяем comparisonResult (на случай, если бэкенд использует другое имя)
+      else if (data.data?.comparisonResult) {
+        result = data.data.comparisonResult;
+      } else if (data.comparisonResult) {
+        result = data.comparisonResult;
+      }
+
+      // Если результат - объект, пытаемся извлечь поле response
+      if (result && typeof result === 'object') {
+        if (result.response) {
+          result = result.response;
+        } else if (result.text) {
+          result = result.text;
+        } else if (result.content) {
+          result = result.content;
+        } else {
+          // Если объект, но нет известных полей, преобразуем в строку
+          result = JSON.stringify(result, null, 2);
+        }
+      }
+
+      if (result && (typeof result === 'string' || typeof result === 'number')) {
+        const resultString = String(result).trim();
+        if (resultString.length > 0) {
+          // Проверяем, не является ли это заглушкой
+          const placeholderTexts = [
+            "Результат сравнения будет здесь",
+            "Результат не получен",
+            "Результат анализа не получен"
+          ];
+          const isPlaceholder = placeholderTexts.some(placeholder => 
+            resultString.toLowerCase().includes(placeholder.toLowerCase())
+          );
+          
+          if (isPlaceholder) {
+            console.warn("Получена заглушка вместо реального результата");
+            setSummarizedResult("Анализ выполняется... Пожалуйста, подождите.");
+          } else {
+            console.log("Найден summarizedResult:", resultString.substring(0, 100) + "...");
+            setSummarizedResult(resultString);
+          }
+        } else {
+          console.warn("summarizedResult пустой");
+          setSummarizedResult("Результат анализа пуст. Попробуйте еще раз.");
+        }
+      } else {
+        console.warn("summarizedResult не найден в ответе. Структура:", {
+          status: data.status,
+          hasData: !!data.data,
+          dataKeys: data.data ? Object.keys(data.data) : [],
+          allKeys: Object.keys(data),
+          summarizedResultType: data.data?.summarizedResult ? typeof data.data.summarizedResult : 'undefined',
+          summarizedResultValue: data.data?.summarizedResult
+        });
+        // Устанавливаем сообщение об ошибке, если результат не найден
+        setSummarizedResult("Результат анализа не получен. Проверьте консоль для деталей.");
+      }
 
       setIsComparisonMode(true);
     } catch (error) {
@@ -375,7 +458,7 @@ function App() {
     <div className="min-h-screen flex flex-col items-center justify-center px-4 bg-gray-100">
       <header className="my-8">
         <h1 className="text-4xl font-bold text-gray-800 text-center">
-          AI Assistant for banking
+          ИИ-Агент "Бенчмаркинг"
         </h1>
       </header>
 
@@ -555,6 +638,7 @@ function App() {
                   <div className="px-8 pb-8 pt-2">
                     <div className="grid grid-cols-1 gap-4">
                       {[
+                        "Сбербанк",
                         "Альфа-Банк",
                         "ВТБ",
                         "Газпромбанк",
@@ -565,20 +649,29 @@ function App() {
                         "Т-Банк",
                         "Банк ДОМ.РФ",
                         "ЮниКредит Банк",
-                      ].map((bank) => (
-                        <label
-                          key={bank}
-                          className="flex items-center cursor-pointer hover:bg-gray-50 rounded-lg p-2 transition"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={selected.banks.includes(bank)}
-                            onChange={() => handleCheckboxChange("banks", bank)}
-                            className="w-6 h-6 text-blue-600 rounded focus:ring-blue-500"
-                          />
-                          <span className="ml-4 text-gray-700">{bank}</span>
-                        </label>
-                      ))}
+                      ].map((bank) => {
+                        const isSberbank = bank === "Сбербанк";
+                        const isDisabled = isSberbank;
+                        return (
+                          <label
+                            key={bank}
+                            className={`flex items-center rounded-lg p-2 transition ${
+                              isDisabled
+                                ? "cursor-not-allowed opacity-60"
+                                : "cursor-pointer hover:bg-gray-50"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selected.banks.includes(bank)}
+                              onChange={() => handleCheckboxChange("banks", bank)}
+                              disabled={isDisabled}
+                              className="w-6 h-6 text-blue-600 rounded focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                            />
+                            <span className="ml-4 text-gray-700">{bank}</span>
+                          </label>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -662,9 +755,24 @@ function App() {
               <div className="bg-white rounded-2xl shadow-xl flex flex-col h-[45vh]">
                 <div className="flex-1 p-6 overflow-y-auto">
                   <div className="bg-gray-100 rounded-lg p-4 mb-4">
-                    <p className="text-gray-800">
-                      Привет! Я подготовил сравнение по выбранным параметрам...
-                    </p>
+                    {isLoading ? (
+                      <div className="text-gray-600">
+                        <p>Обработка запроса...</p>
+                      </div>
+                    ) : summarizedResult ? (
+                      <>
+                        <p className="text-gray-800 mb-2 font-semibold">
+                          Привет! Я подготовил сравнение по выбранным параметрам:
+                        </p>
+                        <div className="text-gray-800 whitespace-pre-wrap mt-2">
+                          <ReactMarkdown>{summarizedResult}</ReactMarkdown>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-gray-600">
+                        Результат анализа будет отображен здесь...
+                      </p>
+                    )}
                   </div>
                 </div>
 
