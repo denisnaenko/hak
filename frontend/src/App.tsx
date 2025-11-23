@@ -56,6 +56,7 @@ function App() {
   const [isComparisonMode, setIsComparisonMode] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [summarizedResult, setSummarizedResult] = useState<string>("");
+  const [comparisonData, setComparisonData] = useState<Record<string, Record<string, string | boolean | number>>>({});
 
   // Загрузка шаблонов из localStorage при загрузке компонента
   useEffect(() => {
@@ -74,6 +75,57 @@ function App() {
   useEffect(() => {
     console.log("summarizedResult изменился:", summarizedResult ? summarizedResult.substring(0, 100) + "..." : "пусто");
   }, [summarizedResult]);
+
+  // Функция для извлечения числового значения из строки для графика
+  const extractNumericValue = (value: string | boolean | number | undefined): number => {
+    if (value === false || value === null || value === undefined) {
+      return 0;
+    }
+    
+    if (typeof value === 'number') {
+      return value;
+    }
+    
+    const str = String(value).toLowerCase();
+    
+    // Если "бесплатно" или пусто
+    if (str.includes("бесплатно") || str.trim() === "") {
+      return 0;
+    }
+    
+    // Извлекаем все числа из строки
+    const numbers = str.match(/[\d.,]+/g);
+    if (!numbers || numbers.length === 0) {
+      return 0;
+    }
+    
+    // Преобразуем числа, убирая пробелы и заменяя запятые на точки
+    const numericValues = numbers.map(num => {
+      const cleaned = num.replace(/\s/g, '').replace(',', '.');
+      return parseFloat(cleaned);
+    }).filter(n => !isNaN(n));
+    
+    if (numericValues.length === 0) {
+      return 0;
+    }
+    
+    // Если есть диапазон (например, "От 0 до 990"), берем максимум
+    // Если есть процент, возвращаем его
+    // Иначе берем первое число
+    const maxValue = Math.max(...numericValues);
+    
+    // Если это процент (строка содержит %), возвращаем как есть
+    if (str.includes('%')) {
+      return maxValue;
+    }
+    
+    // Для больших чисел (например, кредитный лимит) нормализуем до тысяч
+    if (maxValue > 10000) {
+      return maxValue / 1000; // Конвертируем в тысячи
+    }
+    
+    return maxValue;
+  };
 
   const toggleSection = (section: keyof typeof openSections) => {
     setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));
@@ -354,6 +406,7 @@ function App() {
 
     setIsLoading(true);
     setSummarizedResult(""); // Сбрасываем предыдущий результат
+    setComparisonData({}); // Сбрасываем данные для графика
 
     try {
       const response = await fetch("http://localhost:8000/api/params", {
@@ -375,6 +428,12 @@ function App() {
       const data = await response.json();
       console.log("Ответ от сервера:", data);
       console.log("Структура данных:", JSON.stringify(data, null, 2));
+
+      // Сохраняем данные для графика и таблицы
+      if (data.data?.comparisonData) {
+        console.log("Получены данные для сравнения:", data.data.comparisonData);
+        setComparisonData(data.data.comparisonData);
+      }
 
       // Сохраняем результат анализа - проверяем несколько возможных путей
       let result = null;
@@ -820,29 +879,18 @@ function App() {
                                 {criterion}
                               </td>
                               {selected.banks.map((bank) => {
-                                const mockValue = (() => {
-                                  const examples: Record<string, string[]> = {
-                                    "Стоимость обслуживания(дебетовая)": ["Бесплатно", "99 ₽/мес", "0 ₽ при тратах > 10к"],
-                                    "Стоимость обслуживания(кредитная)": ["0 ₽ первый год", "590 ₽/мес", "Бесплатно при тратах > 15к"],
-                                    "СМС-уведомления": ["59 ₽/мес", "Бесплатно", "69 ₽/мес"],
-                                    "Снятие наличных в других банках": ["1%, мин. 290 ₽", "Бесплатно до 100к", "2%, мин. 399 ₽"],
-                                    "Процент на остаток": ["до 12%", "до 10%", "до 14%"],
-                                    "Кредитный лимит": ["до 1 500 000 ₽", "до 1 000 000 ₽", "до 700 000 ₽"],
-                                    "Льготный период": ["до 120 дней", "до 110 дней", "до 55 дней"],
-                                    "Процентные ставки": ["от 19,9%", "от 17,9%", "от 23,9%"],
-                                    "Программа лояльности": ["Кэшбэк до 30%", "Баллы 1%–10%", "Мили 1,5 за 100 ₽"],
-                                  };
-
-                                  const pool = examples[criterion] || ["—", "Есть", "Нет", "Зависит от условий"];
-                                  return pool[Math.floor(Math.random() * pool.length)];
-                                })();
+                                // Получаем значение из comparisonData
+                                const value = comparisonData[criterion]?.[bank];
+                                const displayValue = value !== undefined && value !== null && value !== false 
+                                  ? String(value) 
+                                  : "—";
 
                                 return (
                                   <td
                                     key={bank}
                                     className="px-8 py-5 text-center text-gray-700 min-w-[180px] whitespace-nowrap"
                                   >
-                                    {mockValue}
+                                    {displayValue}
                                   </td>
                                 );
                               })}
@@ -943,9 +991,10 @@ function App() {
                             labels: selected.banks,
                             datasets: selected.criteria.map((criterion, index) => ({
                               label: criterion,
-                              data: selected.banks.map(() =>
-                                Math.round(Math.random() * 900 + 100)
-                              ),
+                              data: selected.banks.map((bank) => {
+                                const value = comparisonData[criterion]?.[bank];
+                                return extractNumericValue(value);
+                              }),
                               backgroundColor: [
                                 'rgba(59, 130, 246, 0.8)',
                                 'rgba(34, 197, 94, 0.8)',
